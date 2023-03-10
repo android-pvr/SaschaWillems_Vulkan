@@ -6,6 +6,7 @@
 * This code is licensed under the MIT license (MIT) (http://opensource.org/licenses/MIT)
 */
 
+#include <unistd.h>
 #include "vulkanexamplebase.h"
 
 #if (defined(VK_USE_PLATFORM_MACOS_MVK) && defined(VK_EXAMPLE_XCODE_GENERATED))
@@ -359,6 +360,7 @@ void VulkanExampleBase::renderLoop()
 		// Render frame
 		if (prepared)
 		{
+			usleep(20000);
 			auto tStart = std::chrono::high_resolution_clock::now();
 			render();
 			frameCounter++;
