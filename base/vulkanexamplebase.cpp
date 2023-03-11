@@ -1365,7 +1365,8 @@ int32_t VulkanExampleBase::handleAppInput(struct android_app* app, AInputEvent* 
 				break;
 			}
 
-			case AINPUT_SOURCE_TOUCHSCREEN: {
+			case AINPUT_SOURCE_TOUCHSCREEN:
+			case AINPUT_SOURCE_MOUSE: {
 				int32_t action = AMotionEvent_getAction(event);
 
 				switch (action) {
