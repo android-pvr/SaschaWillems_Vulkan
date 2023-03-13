@@ -78,6 +78,7 @@ function(buildExamples)
 endfunction(buildExamples)
 
 set(EXAMPLES
+	gears
 	triangle
 )
 
