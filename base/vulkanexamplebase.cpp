@@ -21,11 +21,6 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 {
 	this->settings.validation = enableValidation;
 
-	// Validation can also be forced via a define
-#if defined(_VALIDATION)
-	this->settings.validation = true;
-#endif
-
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = name.c_str();
@@ -35,26 +30,8 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	std::vector<const char*> instanceExtensions = { VK_KHR_SURFACE_EXTENSION_NAME };
 
 	// Enable surface extensions depending on os
-#if defined(_WIN32)
-	instanceExtensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
 	instanceExtensions.push_back(VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
-#elif defined(_DIRECT2DISPLAY)
-	instanceExtensions.push_back(VK_KHR_DISPLAY_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-	instanceExtensions.push_back(VK_EXT_DIRECTFB_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-	instanceExtensions.push_back(VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-	instanceExtensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_IOS_MVK)
-	instanceExtensions.push_back(VK_MVK_IOS_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_MACOS_MVK)
-	instanceExtensions.push_back(VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
-#elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
-	instanceExtensions.push_back(VK_EXT_HEADLESS_SURFACE_EXTENSION_NAME);
-#endif
-	
+
 	// Get extensions supported by the instance and store for later use
 	uint32_t extCount = 0;
 	vkEnumerateInstanceExtensionProperties(nullptr, &extCount, nullptr);
@@ -69,14 +46,6 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 			}
 		}
 	}
-
-#if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
-	// SRS - When running on iOS/macOS with MoltenVK, enable VK_KHR_get_physical_device_properties2 if not already enabled by the example (required by VK_KHR_portability_subset)
-	if (std::find(enabledInstanceExtensions.begin(), enabledInstanceExtensions.end(), VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME) == enabledInstanceExtensions.end())
-	{
-		enabledInstanceExtensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-	}
-#endif
 
 	// Enabled requested instance extensions
 	if (enabledInstanceExtensions.size() > 0) 
@@ -96,15 +65,6 @@ VkResult VulkanExampleBase::createInstance(bool enableValidation)
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pNext = NULL;
 	instanceCreateInfo.pApplicationInfo = &appInfo;
-
-#if (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK)) && defined(VK_KHR_portability_enumeration)
-	// SRS - When running on iOS/macOS with MoltenVK and VK_KHR_portability_enumeration is defined and supported by the instance, enable the extension and the flag
-	if (std::find(supportedInstanceExtensions.begin(), supportedInstanceExtensions.end(), VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME) != supportedInstanceExtensions.end())
-	{
-		instanceExtensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-		instanceCreateInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
-	}
-#endif
 
 	if (instanceExtensions.size() > 0)
 	{
@@ -293,8 +253,6 @@ void VulkanExampleBase::nextFrame()
 void VulkanExampleBase::renderLoop()
 {
 // SRS - for non-apple plaforms, handle benchmarking here within VulkanExampleBase::renderLoop()
-//     - for macOS, handle benchmarking within NSApp rendering loop via displayLinkOutputCb()
-#if !(defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
 	if (benchmark.active) {
 		benchmark.run([=] { render(); }, vulkanDevice->properties);
 		vkDeviceWaitIdle(device);
@@ -303,29 +261,12 @@ void VulkanExampleBase::renderLoop()
 		}
 		return;
 	}
-#endif
 
 	destWidth = width;
 	destHeight = height;
 	lastTimestamp = std::chrono::high_resolution_clock::now();
 	tPrevEnd = lastTimestamp;
-#if defined(_WIN32)
-	MSG msg;
-	bool quitMessageReceived = false;
-	while (!quitMessageReceived) {
-		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-			if (msg.message == WM_QUIT) {
-				quitMessageReceived = true;
-				break;
-			}
-		}
-		if (prepared && !IsIconic(window)) {
-			nextFrame();
-		}
-	}
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
+
 	while (1)
 	{
 		int ident;
@@ -437,224 +378,7 @@ void VulkanExampleBase::renderLoop()
 			}
 		}
 	}
-#elif defined(_DIRECT2DISPLAY)
-	while (!quit)
-	{
-		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-			viewChanged();
-		}
-		render();
-		frameCounter++;
-		auto tEnd = std::chrono::high_resolution_clock::now();
-		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		frameTimer = tDiff / 1000.0f;
-		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
-		// Convert to clamped timer value
-		if (!paused)
-		{
-			timer += timerSpeed * frameTimer;
-			if (timer > 1.0)
-			{
-				timer -= 1.0f;
-			}
-		}
-		float fpsTimer = std::chrono::duration<double, std::milli>(tEnd - lastTimestamp).count();
-		if (fpsTimer > 1000.0f)
-		{
-			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
-			frameCounter = 0;
-			lastTimestamp = tEnd;
-		}
-		updateOverlay();
-	}
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-	while (!quit)
-	{
-		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-			viewChanged();
-		}
-		DFBWindowEvent event;
-		while (!event_buffer->GetEvent(event_buffer, DFB_EVENT(&event)))
-		{
-			handleEvent(&event);
-		}
-		render();
-		frameCounter++;
-		auto tEnd = std::chrono::high_resolution_clock::now();
-		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		frameTimer = tDiff / 1000.0f;
-		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
-		// Convert to clamped timer value
-		if (!paused)
-		{
-			timer += timerSpeed * frameTimer;
-			if (timer > 1.0)
-			{
-				timer -= 1.0f;
-			}
-		}
-		float fpsTimer = std::chrono::duration<double, std::milli>(tEnd - lastTimestamp).count();
-		if (fpsTimer > 1000.0f)
-		{
-			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
-			frameCounter = 0;
-			lastTimestamp = tEnd;
-		}
-		updateOverlay();
-	}
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-	while (!quit)
-	{
-		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-			viewChanged();
-		}
 
-		while (!configured)
-			wl_display_dispatch(display);
-		while (wl_display_prepare_read(display) != 0)
-			wl_display_dispatch_pending(display);
-		wl_display_flush(display);
-		wl_display_read_events(display);
-		wl_display_dispatch_pending(display);
-
-		render();
-		frameCounter++;
-		auto tEnd = std::chrono::high_resolution_clock::now();
-		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		frameTimer = tDiff / 1000.0f;
-		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
-		// Convert to clamped timer value
-		if (!paused)
-		{
-			timer += timerSpeed * frameTimer;
-			if (timer > 1.0)
-			{
-				timer -= 1.0f;
-			}
-		}
-		float fpsTimer = std::chrono::duration<double, std::milli>(tEnd - lastTimestamp).count();
-		if (fpsTimer > 1000.0f)
-		{
-			if (!settings.overlay)
-			{
-				std::string windowTitle = getWindowTitle();
-				xdg_toplevel_set_title(xdg_toplevel, windowTitle.c_str());
-			}
-			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
-			frameCounter = 0;
-			lastTimestamp = tEnd;
-		}
-		updateOverlay();
-	}
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-	xcb_flush(connection);
-	while (!quit)
-	{
-		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-			viewChanged();
-		}
-		xcb_generic_event_t *event;
-		while ((event = xcb_poll_for_event(connection)))
-		{
-			handleEvent(event);
-			free(event);
-		}
-		render();
-		frameCounter++;
-		auto tEnd = std::chrono::high_resolution_clock::now();
-		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		frameTimer = tDiff / 1000.0f;
-		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
-		// Convert to clamped timer value
-		if (!paused)
-		{
-			timer += timerSpeed * frameTimer;
-			if (timer > 1.0)
-			{
-				timer -= 1.0f;
-			}
-		}
-		float fpsTimer = std::chrono::duration<double, std::milli>(tEnd - lastTimestamp).count();
-		if (fpsTimer > 1000.0f)
-		{
-			if (!settings.overlay)
-			{
-				std::string windowTitle = getWindowTitle();
-				xcb_change_property(connection, XCB_PROP_MODE_REPLACE,
-					window, XCB_ATOM_WM_NAME, XCB_ATOM_STRING, 8,
-					windowTitle.size(), windowTitle.c_str());
-			}
-			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
-			frameCounter = 0;
-			lastTimestamp = tEnd;
-		}
-		updateOverlay();
-	}
-#elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
-	while (!quit)
-	{
-		auto tStart = std::chrono::high_resolution_clock::now();
-		if (viewUpdated)
-		{
-			viewUpdated = false;
-			viewChanged();
-		}
-		render();
-		frameCounter++;
-		auto tEnd = std::chrono::high_resolution_clock::now();
-		auto tDiff = std::chrono::duration<double, std::milli>(tEnd - tStart).count();
-		frameTimer = tDiff / 1000.0f;
-		camera.update(frameTimer);
-		if (camera.moving())
-		{
-			viewUpdated = true;
-		}
-		// Convert to clamped timer value
-		timer += timerSpeed * frameTimer;
-		if (timer > 1.0)
-		{
-			timer -= 1.0f;
-		}
-		float fpsTimer = std::chrono::duration<double, std::milli>(tEnd - lastTimestamp).count();
-		if (fpsTimer > 1000.0f)
-		{
-			lastFPS = (float)frameCounter * (1000.0f / fpsTimer);
-			frameCounter = 0;
-			lastTimestamp = tEnd;
-		}
-		updateOverlay();
-	}
-#elif (defined(VK_USE_PLATFORM_MACOS_MVK) && defined(VK_EXAMPLE_XCODE_GENERATED))
-	[NSApp run];
-#endif
 	// Flush device to make sure all resources can be freed
 	if (device != VK_NULL_HANDLE) {
 		vkDeviceWaitIdle(device);
@@ -994,28 +718,6 @@ bool VulkanExampleBase::initVulkan()
 	// Select physical device to be used for the Vulkan example
 	// Defaults to the first device unless specified by command line
 	uint32_t selectedDevice = 0;
-
-#if !defined(VK_USE_PLATFORM_ANDROID_KHR)
-	// GPU selection via command line argument
-	if (commandLineParser.isSet("gpuselection")) {
-		uint32_t index = commandLineParser.getValueAsInt("gpuselection", 0);
-		if (index > gpuCount - 1) {
-			std::cerr << "Selected device index " << index << " is out of range, reverting to device 0 (use -listgpus to show available Vulkan devices)" << "\n";
-		} else {
-			selectedDevice = index;
-		}
-	}
-	if (commandLineParser.isSet("gpulist")) {
-		std::cout << "Available Vulkan devices" << "\n";
-		for (uint32_t i = 0; i < gpuCount; i++) {
-			VkPhysicalDeviceProperties deviceProperties;
-			vkGetPhysicalDeviceProperties(physicalDevices[i], &deviceProperties);
-			std::cout << "Device [" << i << "] : " << deviceProperties.deviceName << std::endl;
-			std::cout << " Type: " << vks::tools::physicalDeviceTypeString(deviceProperties.deviceType) << "\n";
-			std::cout << " API: " << (deviceProperties.apiVersion >> 22) << "." << ((deviceProperties.apiVersion >> 12) & 0x3ff) << "." << (deviceProperties.apiVersion & 0xfff) << "\n";
-		}
-	}
-#endif
 
 	physicalDevice = physicalDevices[selectedDevice];
 

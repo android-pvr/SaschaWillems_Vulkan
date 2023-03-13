@@ -334,15 +334,6 @@ public:
 
 	void draw()
 	{
-#if defined(VK_USE_PLATFORM_MACOS_MVK)
-		// SRS - on macOS use swapchain helper function with common semaphores/fences for proper resize handling
-		// Get next image in the swap chain (back/front buffer)
-		prepareFrame();
-
-		// Use a fence to wait until the command buffer has finished execution before using it again
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &waitFences[currentBuffer], VK_TRUE, UINT64_MAX));
-		VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentBuffer]));
-#else
 		// SRS - on other platforms use original bare code with local semaphores/fences for illustrative purposes
 		// Get next image in the swap chain (back/front buffer)
 		VkResult acquire = swapChain.acquireNextImage(presentCompleteSemaphore, &currentBuffer);
@@ -353,7 +344,6 @@ public:
 		// Use a fence to wait until the command buffer has finished execution before using it again
 		VK_CHECK_RESULT(vkWaitForFences(device, 1, &queueCompleteFences[currentBuffer], VK_TRUE, UINT64_MAX));
 		VK_CHECK_RESULT(vkResetFences(device, 1, &queueCompleteFences[currentBuffer]));
-#endif
 
 		// Pipeline stage at which the queue submission will wait (via pWaitSemaphores)
 		VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -366,17 +356,6 @@ public:
 		submitInfo.pCommandBuffers = &drawCmdBuffers[currentBuffer]; // Command buffers(s) to execute in this batch (submission)
 		submitInfo.commandBufferCount = 1;                           // One command buffer
 
-#if defined(VK_USE_PLATFORM_MACOS_MVK)
-		// SRS - on macOS use swapchain helper function with common semaphores/fences for proper resize handling
-		submitInfo.pWaitSemaphores = &semaphores.presentComplete;    // Semaphore(s) to wait upon before the submitted command buffer starts executing
-		submitInfo.pSignalSemaphores = &semaphores.renderComplete;   // Semaphore(s) to be signaled when command buffers have completed
-
-		// Submit to the graphics queue passing a wait fence
-		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentBuffer]));
-
-		// Present the current buffer to the swap chain
-		submitFrame();
-#else
 		// SRS - on other platforms use original bare code with local semaphores/fences for illustrative purposes
 		submitInfo.pWaitSemaphores = &presentCompleteSemaphore;      // Semaphore(s) to wait upon before the submitted command buffer starts executing
 		submitInfo.pSignalSemaphores = &renderCompleteSemaphore;     // Semaphore(s) to be signaled when command buffers have completed
@@ -391,7 +370,6 @@ public:
 		if (!((present == VK_SUCCESS) || (present == VK_SUBOPTIMAL_KHR))) {
 			VK_CHECK_RESULT(present);
 		}
-#endif
 	}
 
 	// Prepare vertex and index buffers for an indexed triangle
@@ -827,7 +805,6 @@ public:
 		size_t shaderSize;
 		char* shaderCode = NULL;
 
-#if defined(__ANDROID__)
 		// Load shader from compressed asset
 		AAsset* asset = AAssetManager_open(androidApp->activity->assetManager, filename.c_str(), AASSET_MODE_STREAMING);
 		assert(asset);
@@ -837,20 +814,7 @@ public:
 		shaderCode = new char[shaderSize];
 		AAsset_read(asset, shaderCode, shaderSize);
 		AAsset_close(asset);
-#else
-		std::ifstream is(filename, std::ios::binary | std::ios::in | std::ios::ate);
 
-		if (is.is_open())
-		{
-			shaderSize = is.tellg();
-			is.seekg(0, std::ios::beg);
-			// Copy file contents into a buffer
-			shaderCode = new char[shaderSize];
-			is.read(shaderCode, shaderSize);
-			is.close();
-			assert(shaderSize > 0);
-		}
-#endif
 		if (shaderCode)
 		{
 			// Create a new shader module that will be used for pipeline creation
@@ -1123,33 +1087,6 @@ public:
 	}
 };
 
-// OS specific macros for the example main entry points
-// Most of the code base is shared for the different supported operating systems, but stuff like message handling differs
-
-#if defined(_WIN32)
-// Windows entry point
-VulkanExample *vulkanExample;
-LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	if (vulkanExample != NULL)
-	{
-		vulkanExample->handleMessages(hWnd, uMsg, wParam, lParam);
-	}
-	return (DefWindowProc(hWnd, uMsg, wParam, lParam));
-}
-int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
-{
-	for (size_t i = 0; i < __argc; i++) { VulkanExample::args.push_back(__argv[i]); };
-	vulkanExample = new VulkanExample();
-	vulkanExample->initVulkan();
-	vulkanExample->setupWindow(hInstance, WndProc);
-	vulkanExample->prepare();
-	vulkanExample->renderLoop();
-	delete(vulkanExample);
-	return 0;
-}
-
-#elif defined(__ANDROID__)
 // Android entry point
 VulkanExample *vulkanExample;
 void android_main(android_app* state)
@@ -1162,99 +1099,4 @@ void android_main(android_app* state)
 	vulkanExample->renderLoop();
 	delete(vulkanExample);
 }
-#elif defined(_DIRECT2DISPLAY)
 
-// Linux entry point with direct to display wsi
-// Direct to Displays (D2D) is used on embedded platforms
-VulkanExample *vulkanExample;
-static void handleEvent()
-{
-}
-int main(const int argc, const char *argv[])
-{
-	for (size_t i = 0; i < argc; i++) { VulkanExample::args.push_back(argv[i]); };
-	vulkanExample = new VulkanExample();
-	vulkanExample->initVulkan();
-	vulkanExample->prepare();
-	vulkanExample->renderLoop();
-	delete(vulkanExample);
-	return 0;
-}
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-VulkanExample *vulkanExample;
-static void handleEvent(const DFBWindowEvent *event)
-{
-	if (vulkanExample != NULL)
-	{
-		vulkanExample->handleEvent(event);
-	}
-}
-int main(const int argc, const char *argv[])
-{
-	for (size_t i = 0; i < argc; i++) { VulkanExample::args.push_back(argv[i]); };
-	vulkanExample = new VulkanExample();
-	vulkanExample->initVulkan();
-	vulkanExample->setupWindow();
-	vulkanExample->prepare();
-	vulkanExample->renderLoop();
-	delete(vulkanExample);
-	return 0;
-}
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-VulkanExample *vulkanExample;
-int main(const int argc, const char *argv[])
-{
-	for (size_t i = 0; i < argc; i++) { VulkanExample::args.push_back(argv[i]); };
-	vulkanExample = new VulkanExample();
-	vulkanExample->initVulkan();
-	vulkanExample->setupWindow();
-	vulkanExample->prepare();
-	vulkanExample->renderLoop();
-	delete(vulkanExample);
-	return 0;
-}
-#elif defined(__linux__) || defined(__FreeBSD__)
-
-// Linux entry point
-VulkanExample *vulkanExample;
-#if defined(VK_USE_PLATFORM_XCB_KHR)
-static void handleEvent(const xcb_generic_event_t *event)
-{
-	if (vulkanExample != NULL)
-	{
-		vulkanExample->handleEvent(event);
-	}
-}
-#else
-static void handleEvent()
-{
-}
-#endif
-int main(const int argc, const char *argv[])
-{
-	for (size_t i = 0; i < argc; i++) { VulkanExample::args.push_back(argv[i]); };
-	vulkanExample = new VulkanExample();
-	vulkanExample->initVulkan();
-	vulkanExample->setupWindow();
-	vulkanExample->prepare();
-	vulkanExample->renderLoop();
-	delete(vulkanExample);
-	return 0;
-}
-#elif (defined(VK_USE_PLATFORM_MACOS_MVK) && defined(VK_EXAMPLE_XCODE_GENERATED))
-VulkanExample *vulkanExample;
-int main(const int argc, const char *argv[])
-{
-	@autoreleasepool
-	{
-		for (size_t i = 0; i < argc; i++) { VulkanExample::args.push_back(argv[i]); };
-		vulkanExample = new VulkanExample();
-		vulkanExample->initVulkan();
-		vulkanExample->setupWindow(nullptr);
-		vulkanExample->prepare();
-		vulkanExample->renderLoop();
-		delete(vulkanExample);
-	}
-	return 0;
-}
-#endif

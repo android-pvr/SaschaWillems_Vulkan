@@ -11,79 +11,15 @@
 #include "VulkanSwapChain.h"
 
 /** @brief Creates the platform specific surface abstraction of the native platform window used for presentation */	
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-void VulkanSwapChain::initSurface(void* platformHandle, void* platformWindow)
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
 void VulkanSwapChain::initSurface(ANativeWindow* window)
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-void VulkanSwapChain::initSurface(IDirectFB* dfb, IDirectFBSurface* window)
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-void VulkanSwapChain::initSurface(wl_display *display, wl_surface *window)
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-void VulkanSwapChain::initSurface(xcb_connection_t* connection, xcb_window_t window)
-#elif (defined(VK_USE_PLATFORM_IOS_MVK) || defined(VK_USE_PLATFORM_MACOS_MVK))
-void VulkanSwapChain::initSurface(void* view)
-#elif (defined(_DIRECT2DISPLAY) || defined(VK_USE_PLATFORM_HEADLESS_EXT))
-void VulkanSwapChain::initSurface(uint32_t width, uint32_t height)
-#endif
 {
 	VkResult err = VK_SUCCESS;
 
 	// Create the os-specific surface
-#if defined(VK_USE_PLATFORM_WIN32_KHR)
-	VkWin32SurfaceCreateInfoKHR surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-	surfaceCreateInfo.hinstance = (HINSTANCE)platformHandle;
-	surfaceCreateInfo.hwnd = (HWND)platformWindow;
-	err = vkCreateWin32SurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
-#elif defined(VK_USE_PLATFORM_ANDROID_KHR)
 	VkAndroidSurfaceCreateInfoKHR surfaceCreateInfo = {};
 	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
 	surfaceCreateInfo.window = window;
 	err = vkCreateAndroidSurfaceKHR(instance, &surfaceCreateInfo, NULL, &surface);
-#elif defined(VK_USE_PLATFORM_IOS_MVK)
-	VkIOSSurfaceCreateInfoMVK surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_IOS_SURFACE_CREATE_INFO_MVK;
-	surfaceCreateInfo.pNext = NULL;
-	surfaceCreateInfo.flags = 0;
-	surfaceCreateInfo.pView = view;
-	err = vkCreateIOSSurfaceMVK(instance, &surfaceCreateInfo, nullptr, &surface);
-#elif defined(VK_USE_PLATFORM_MACOS_MVK)
-	VkMacOSSurfaceCreateInfoMVK surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
-	surfaceCreateInfo.pNext = NULL;
-	surfaceCreateInfo.flags = 0;
-	surfaceCreateInfo.pView = view;
-	err = vkCreateMacOSSurfaceMVK(instance, &surfaceCreateInfo, NULL, &surface);
-#elif defined(_DIRECT2DISPLAY)
-	createDirect2DisplaySurface(width, height);
-#elif defined(VK_USE_PLATFORM_DIRECTFB_EXT)
-	VkDirectFBSurfaceCreateInfoEXT surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_DIRECTFB_SURFACE_CREATE_INFO_EXT;
-	surfaceCreateInfo.dfb = dfb;
-	surfaceCreateInfo.surface = window;
-	err = vkCreateDirectFBSurfaceEXT(instance, &surfaceCreateInfo, nullptr, &surface);
-#elif defined(VK_USE_PLATFORM_WAYLAND_KHR)
-	VkWaylandSurfaceCreateInfoKHR surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
-	surfaceCreateInfo.display = display;
-	surfaceCreateInfo.surface = window;
-	err = vkCreateWaylandSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
-#elif defined(VK_USE_PLATFORM_XCB_KHR)
-	VkXcbSurfaceCreateInfoKHR surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
-	surfaceCreateInfo.connection = connection;
-	surfaceCreateInfo.window = window;
-	err = vkCreateXcbSurfaceKHR(instance, &surfaceCreateInfo, nullptr, &surface);
-#elif defined(VK_USE_PLATFORM_HEADLESS_EXT)
-	VkHeadlessSurfaceCreateInfoEXT surfaceCreateInfo = {};
-	surfaceCreateInfo.sType = VK_STRUCTURE_TYPE_HEADLESS_SURFACE_CREATE_INFO_EXT;
-	PFN_vkCreateHeadlessSurfaceEXT fpCreateHeadlessSurfaceEXT = (PFN_vkCreateHeadlessSurfaceEXT)vkGetInstanceProcAddr(instance, "vkCreateHeadlessSurfaceEXT");
-	if (!fpCreateHeadlessSurfaceEXT){
-		vks::tools::exitFatal("Could not fetch function pointer for the headless extension!", -1);
-	}
-	err = fpCreateHeadlessSurfaceEXT(instance, &surfaceCreateInfo, nullptr, &surface);
-#endif
 
 	if (err != VK_SUCCESS) {
 		vks::tools::exitFatal("Could not create surface!", err);
@@ -290,17 +226,6 @@ void VulkanSwapChain::create(uint32_t *width, uint32_t *height, bool vsync, bool
 
 	// Determine the number of images
 	uint32_t desiredNumberOfSwapchainImages = surfCaps.minImageCount + 1;
-#if (defined(VK_USE_PLATFORM_MACOS_MVK) && defined(VK_EXAMPLE_XCODE_GENERATED))
-	// SRS - Work around known MoltenVK issue re 2x frame rate when vsync (VK_PRESENT_MODE_FIFO_KHR) enabled
-	struct utsname sysInfo;
-	uname(&sysInfo);
-	// SRS - When vsync is on, use minImageCount when not in fullscreen or when running on Apple Silcon
-	// This forces swapchain image acquire frame rate to match display vsync frame rate
-	if (vsync && (!fullscreen || strcmp(sysInfo.machine, "arm64") == 0))
-	{
-		desiredNumberOfSwapchainImages = surfCaps.minImageCount;
-	}
-#endif
 	if ((surfCaps.maxImageCount > 0) && (desiredNumberOfSwapchainImages > surfCaps.maxImageCount))
 	{
 		desiredNumberOfSwapchainImages = surfCaps.maxImageCount;
