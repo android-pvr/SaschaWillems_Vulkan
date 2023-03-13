@@ -209,6 +209,7 @@ FakesAssemblies/
 # Android validation layer libraries
 android/layers/*/*.so
 android/**/jni/
+android/examples/base/*.a
 
 # Downloadable assets
 vulkan_asset_pack_gltf.*
